@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  background: #111827;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent iOS bounce scroll */
+body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure smooth SVG rendering */
+svg {
+  shape-rendering: geometricPrecision;
+}
