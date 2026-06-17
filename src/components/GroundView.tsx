@@ -71,7 +71,7 @@ interface Props {
   autoDuration?: number
 }
 
-export default function GroundView({ scenario, onDone, autoDuration = 3000 }: Props) {
+export default function GroundView({ scenario, onDone, autoDuration = 5000 }: Props) {
   // Measure actual container so the SVG fills it exactly — no letterboxing
   const containerRef = useRef<HTMLDivElement>(null)
   const [vw, setVw] = useState(390)
@@ -290,7 +290,7 @@ export default function GroundView({ scenario, onDone, autoDuration = 3000 }: Pr
       <div className="h-1 bg-gray-700 flex-none">
         <div
           className="h-1 bg-blue-500"
-          style={{ width: `${progressPct}%` }}
+          style={{ width: `${progressPct}%`, transition: 'width 0.08s linear' }}
         />
       </div>
     </div>
