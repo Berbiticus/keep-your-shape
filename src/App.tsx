@@ -213,7 +213,7 @@ export default function App() {
           onSideChange={setSide}
           onFilterChange={setPhaseFilter}
           onLevelChange={setSelectedLevel}
-          onStart={startGame}
+          onStart={() => startGame()}
         />
       )}
 
