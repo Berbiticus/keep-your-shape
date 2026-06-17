@@ -35,3 +35,12 @@ export interface Arrow {
 export type ScoreLevel = 'perfect' | 'good' | 'close' | 'miss'
 export type PhaseFilter = 'all' | 'attacking' | 'defending'
 export type Screen = 'start' | 'game' | 'end'
+
+export type Level = 1 | 2 | 3 | 4 | 5
+
+export interface RoleProgress {
+  unlocked: Level                        // highest level accessible (always ≥ 1)
+  best: Partial<Record<Level, number>>   // best % score (0–100) per level attempted
+}
+
+export type Progress = Partial<Record<PlayerRole, RoleProgress>>

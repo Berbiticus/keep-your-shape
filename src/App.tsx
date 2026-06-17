@@ -1,11 +1,34 @@
 import { useState, useCallback, useEffect } from 'react'
-import type { PhaseFilter, PlayerRole, ScoreLevel, Screen, WingerSide, Scenario, Arrow, Position as Pos } from './types'
+import type {
+  PhaseFilter, PlayerRole, Progress, Level, RoleProgress,
+  ScoreLevel, Screen, WingerSide, Scenario, Arrow, Position as Pos,
+} from './types'
 import allScenarios from './data/scenarios'
 import StartScreen from './components/StartScreen'
 import ScenarioView from './components/ScenarioView'
 import EndScreen from './components/EndScreen'
 
-const HS_KEY = 'socceriq-highscore'
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const HS_KEY       = 'socceriq-highscore'
+const PROGRESS_KEY = 'socceriq-progress'
+
+export const LEVEL_NAMES: Record<Level, string> = {
+  1: 'Grassroots',
+  2: 'Club',
+  3: 'Academy',
+  4: 'Pro',
+  5: 'Elite',
+}
+
+// Target radius multiplier per level — lower = tighter precision required
+export const DIFFICULTY: Record<Level, number> = {
+  1: 1.5,
+  2: 1.2,
+  3: 1.0,
+  4: 0.75,
+  5: 0.55,
+}
 
 const ROLE_LABEL: Record<PlayerRole, string> = {
   striker:    '⚽ Striker',
@@ -13,6 +36,32 @@ const ROLE_LABEL: Record<PlayerRole, string> = {
   winger:     '⚡ Winger',
   defender:   '🛡 Defender',
 }
+
+// ── Persistence ───────────────────────────────────────────────────────────────
+
+function loadHighScore(): number {
+  try { return parseInt(localStorage.getItem(HS_KEY) ?? '0', 10) || 0 }
+  catch { return 0 }
+}
+function saveHighScore(n: number) {
+  try { localStorage.setItem(HS_KEY, String(n)) } catch { /* noop */ }
+}
+
+function loadProgress(): Progress {
+  try {
+    const raw = localStorage.getItem(PROGRESS_KEY)
+    return raw ? (JSON.parse(raw) as Progress) : {}
+  } catch { return {} }
+}
+function saveProgress(p: Progress) {
+  try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(p)) } catch { /* noop */ }
+}
+
+export function getRoleProgress(progress: Progress, role: PlayerRole): RoleProgress {
+  return progress[role] ?? { unlocked: 1, best: {} }
+}
+
+// ── Scenario helpers ──────────────────────────────────────────────────────────
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
@@ -23,19 +72,7 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
-function loadHighScore(): number {
-  try { return parseInt(localStorage.getItem(HS_KEY) ?? '0', 10) || 0 }
-  catch { return 0 }
-}
-
-function saveHighScore(n: number) {
-  try { localStorage.setItem(HS_KEY, String(n)) } catch { /* noop */ }
-}
-
-// Flip a position around the vertical centre line: x → 100 − x
-function flipPos(p: Pos): Pos {
-  return { x: 100 - p.x, y: p.y }
-}
+function flipPos(p: Pos): Pos { return { x: 100 - p.x, y: p.y } }
 
 function flipArrow(a: Arrow): Arrow {
   return {
@@ -46,7 +83,6 @@ function flipArrow(a: Arrow): Arrow {
   }
 }
 
-// Mirror every coordinate so a right-winger scenario becomes a left-winger one
 function mirrorScenario(s: Scenario): Scenario {
   return {
     ...s,
@@ -60,46 +96,53 @@ function mirrorScenario(s: Scenario): Scenario {
   }
 }
 
-export default function App() {
-  const [screen, setScreen]           = useState<Screen>('start')
-  const [role, setRole]               = useState<PlayerRole>('winger')
-  const [side, setSide]               = useState<WingerSide>('right')
-  const [phaseFilter, setPhaseFilter] = useState<PhaseFilter>('all')
-  const [queue, setQueue]             = useState<Scenario[]>([])
-  const [currentIdx, setCurrentIdx]   = useState(0)
-  const [score, setScore]             = useState(0)
-  const [streak, setStreak]           = useState(0)
-  const [maxStreak, setMaxStreak]     = useState(0)
-  const [highScore, setHighScore]     = useState(loadHighScore)
+// ── App ───────────────────────────────────────────────────────────────────────
 
-  const buildQueue = useCallback(() => {
+export default function App() {
+  const [screen, setScreen]               = useState<Screen>('start')
+  const [role, setRole]                   = useState<PlayerRole>('winger')
+  const [side, setSide]                   = useState<WingerSide>('right')
+  const [selectedLevel, setSelectedLevel] = useState<Level>(1)
+  const [phaseFilter, setPhaseFilter]     = useState<PhaseFilter>('all')
+  const [progress, setProgress]           = useState<Progress>(loadProgress)
+
+  const [queue, setQueue]       = useState<Scenario[]>([])
+  const [currentIdx, setCurrentIdx] = useState(0)
+  const [score, setScore]       = useState(0)
+  const [streak, setStreak]     = useState(0)
+  const [maxStreak, setMaxStreak] = useState(0)
+  const [highScore, setHighScore] = useState(loadHighScore)
+
+  // Derived end-screen values
+  const maxScore = queue.length * 100
+  const scorePct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
+  const levelPassed = scorePct >= 80
+
+  const buildPool = useCallback(() => {
     let pool = allScenarios.filter(s => {
       if (s.role !== role) return false
       if (phaseFilter !== 'all' && s.phase !== phaseFilter) return false
       return true
     })
-
-    // Fall back to all scenarios for this role if the phase filter leaves nothing
-    if (pool.length === 0) {
-      pool = allScenarios.filter(s => s.role === role)
-    }
-
-    // Mirror every scenario for left winger
-    if (role === 'winger' && side === 'left') {
-      pool = pool.map(mirrorScenario)
-    }
-
+    if (pool.length === 0) pool = allScenarios.filter(s => s.role === role)
+    if (role === 'winger' && side === 'left') pool = pool.map(mirrorScenario)
     return shuffle(pool)
   }, [role, side, phaseFilter])
 
-  const startGame = useCallback(() => {
-    setQueue(buildQueue())
+  const startGame = useCallback((overrideLevel?: Level) => {
+    setQueue(buildPool())
     setCurrentIdx(0)
     setScore(0)
     setStreak(0)
     setMaxStreak(0)
+    if (overrideLevel !== undefined) setSelectedLevel(overrideLevel)
     setScreen('game')
-  }, [buildQueue])
+  }, [buildPool])
+
+  const handleRoleChange = useCallback((r: PlayerRole) => {
+    setRole(r)
+    setSelectedLevel(1)
+  }, [])
 
   const handleScored = useCallback((points: number, level: ScoreLevel) => {
     setScore(s => s + points)
@@ -119,17 +162,42 @@ export default function App() {
     }
   }, [currentIdx, queue.length])
 
-  // Persist high score when session ends
+  // Persist high score and level progress when a session ends
   useEffect(() => {
     if (screen !== 'end') return
-    if (score > highScore) {
-      saveHighScore(score)
-      setHighScore(score)
-    }
+
+    if (score > highScore) { saveHighScore(score); setHighScore(score) }
+
+    setProgress(prev => {
+      const rp = prev[role] ?? { unlocked: 1 as Level, best: {} }
+      const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
+      const newBest = Math.max(rp.best[selectedLevel] ?? 0, pct)
+      const passed = pct >= 80
+      const nextLvl = (selectedLevel + 1) as Level
+      const shouldUnlock = passed && selectedLevel < 5 && rp.unlocked < nextLvl
+      const newUnlocked: Level = shouldUnlock ? nextLvl : rp.unlocked
+      const updated: RoleProgress = {
+        unlocked: Math.max(rp.unlocked, newUnlocked) as Level,
+        best: { ...rp.best, [selectedLevel]: newBest },
+      }
+      const next = { ...prev, [role]: updated }
+      saveProgress(next)
+      return next
+    })
   }, [screen]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleReplay = useCallback(() => startGame(), [startGame])
-  const handleHome   = useCallback(() => setScreen('start'), [])
+  const handleReplay    = useCallback(() => startGame(), [startGame])
+  const handleHome      = useCallback(() => setScreen('start'), [])
+  const handleNextLevel = useCallback(() => {
+    const next = Math.min(5, selectedLevel + 1) as Level
+    startGame(next)
+  }, [selectedLevel, startGame])
+
+  const roleLabel = role === 'winger'
+    ? (side === 'left' ? '⚡ LW' : '⚡ RW')
+    : ROLE_LABEL[role]
+
+  const rp = getRoleProgress(progress, role)
 
   return (
     <div className="h-screen w-screen bg-gray-900 overflow-hidden flex flex-col">
@@ -139,9 +207,12 @@ export default function App() {
           role={role}
           side={side}
           phaseFilter={phaseFilter}
-          onRoleChange={setRole}
+          selectedLevel={selectedLevel}
+          roleProgress={rp}
+          onRoleChange={handleRoleChange}
           onSideChange={setSide}
           onFilterChange={setPhaseFilter}
+          onLevelChange={setSelectedLevel}
           onStart={startGame}
         />
       )}
@@ -154,7 +225,9 @@ export default function App() {
           totalScenarios={queue.length}
           score={score}
           streak={streak}
-          roleLabel={role === 'winger' ? (side === 'left' ? '⚡ LW' : '⚡ RW') : ROLE_LABEL[role]}
+          roleLabel={roleLabel}
+          level={selectedLevel}
+          difficultyMult={DIFFICULTY[selectedLevel]}
           onScored={handleScored}
           onNext={handleNext}
         />
@@ -163,10 +236,16 @@ export default function App() {
       {screen === 'end' && (
         <EndScreen
           score={score}
+          maxScore={maxScore}
+          scorePct={scorePct}
+          levelPassed={levelPassed}
+          level={selectedLevel}
+          role={role}
           maxStreak={maxStreak}
-          totalScenarios={queue.length}
           highScore={highScore}
+          hasNextLevel={selectedLevel < 5 && rp.unlocked >= Math.min(5, selectedLevel + 1) as unknown as boolean}
           onReplay={handleReplay}
+          onNextLevel={handleNextLevel}
           onHome={handleHome}
         />
       )}

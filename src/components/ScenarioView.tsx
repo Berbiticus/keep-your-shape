@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import type { Scenario, Position, ScoreLevel, Arrow } from '../types'
+import type { Scenario, Position, ScoreLevel, Arrow, Level } from '../types'
+import { LEVEL_NAMES } from '../App'
 
 // ── Coordinate helpers ────────────────────────────────────────────────────────
 // SVG viewport: 68 × 105 units (matches real pitch proportions in metres)
@@ -202,6 +203,8 @@ function ArrowLayer({ arrows }: { arrows?: Arrow[] }) {
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
+const LEVEL_ICONS: Record<Level, string> = { 1: '🌱', 2: '🏅', 3: '🎓', 4: '🌟', 5: '👑' }
+
 interface Props {
   scenario: Scenario
   scenarioNumber: number
@@ -209,6 +212,8 @@ interface Props {
   score: number
   streak: number
   roleLabel: string
+  level: Level
+  difficultyMult: number
   onScored: (points: number, level: ScoreLevel) => void
   onNext: () => void
 }
@@ -218,6 +223,8 @@ interface Props {
 export default function ScenarioView({
   scenario,
   roleLabel,
+  level,
+  difficultyMult,
   scenarioNumber,
   totalScenarios,
   score,
@@ -306,16 +313,19 @@ export default function ScenarioView({
     }
   }, [handlePointerDown, handlePointerMove, handlePointerUp])
 
+  // Effective radius after applying difficulty multiplier
+  const effectiveRadius = scenario.target.radius * difficultyMult
+
   // Lock it in
   const handleLock = () => {
     if (phase !== 'placing') return
     const d = dist(playerPos, scenario.target)
-    const level = scoreLevel(d, scenario.target.radius)
-    const points = SCORE_POINTS[level]
-    setResult({ level, points })
+    const sl = scoreLevel(d, effectiveRadius)
+    const points = SCORE_POINTS[sl]
+    setResult({ level: sl, points })
     setPhase('revealed')
-    onScored(points, level)
-    if (level === 'perfect') {
+    onScored(points, sl)
+    if (sl === 'perfect') {
       setShowCelebration(true)
       setTimeout(() => setShowCelebration(false), 2200)
     }
@@ -325,8 +335,8 @@ export default function ScenarioView({
   const svgBall    = toSVG(scenario.ball)
   const svgPlayer  = toSVG(playerPos)
   const svgTarget  = toSVG(scenario.target)
-  const svgTargetRx = scenario.target.radius * PW / 100
-  const svgTargetRy = scenario.target.radius * PH / 100
+  const svgTargetRx = effectiveRadius * PW / 100
+  const svgTargetRy = effectiveRadius * PH / 100
 
   return (
     <div className="flex flex-col h-full select-none">
@@ -338,6 +348,9 @@ export default function ScenarioView({
           </span>
           <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-gray-700 text-gray-300">
             {roleLabel}
+          </span>
+          <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-purple-900/60 text-purple-300">
+            {LEVEL_ICONS[level]} {LEVEL_NAMES[level]}
           </span>
           <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
             scenario.phase === 'attacking'
