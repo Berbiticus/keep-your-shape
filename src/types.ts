@@ -7,15 +7,19 @@ export interface TargetZone extends Position {
   radius: number // in game units (same scale as x/y)
 }
 
+export type PlayerRole = 'striker' | 'midfielder' | 'winger' | 'defender'
+export type WingerSide = 'left' | 'right'
+
 export interface Scenario {
   id: string
+  role: PlayerRole
   phase: 'attacking' | 'defending'
   principle: string
   prompt: string
   ball: Position
-  teammates: Position[] // all other own-team players (not my son)
+  teammates: Position[] // all other own-team players (not the player)
   opponents: Position[]
-  start: Position       // where his marker begins (a plausible-wrong spot)
+  start: Position       // where the marker begins (a plausible-wrong spot)
   target: TargetZone    // ideal zone
   explanation: string   // coaching why, kid-friendly
   arrows?: Arrow[]      // movement arrows that explain what's happening in the play

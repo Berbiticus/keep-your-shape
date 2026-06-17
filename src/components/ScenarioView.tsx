@@ -208,6 +208,7 @@ interface Props {
   totalScenarios: number
   score: number
   streak: number
+  roleLabel: string
   onScored: (points: number, level: ScoreLevel) => void
   onNext: () => void
 }
@@ -216,6 +217,7 @@ interface Props {
 
 export default function ScenarioView({
   scenario,
+  roleLabel,
   scenarioNumber,
   totalScenarios,
   score,
@@ -334,12 +336,15 @@ export default function ScenarioView({
           <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">
             {scenarioNumber}/{totalScenarios}
           </span>
+          <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-gray-700 text-gray-300">
+            {roleLabel}
+          </span>
           <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
             scenario.phase === 'attacking'
               ? 'bg-blue-900/60 text-blue-300'
               : 'bg-red-900/60 text-red-300'
           }`}>
-            {scenario.phase === 'attacking' ? '⚔ Attacking' : '🛡 Defending'}
+            {scenario.phase === 'attacking' ? '⚔' : '🛡'}
           </span>
         </div>
         <div className="flex items-center gap-4">
