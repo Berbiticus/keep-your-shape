@@ -1,7 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import type { Scenario, Position, ScoreLevel, Arrow, Level } from '../types'
 import { LEVEL_NAMES } from '../App'
-import GroundView from './GroundView'
 
 // ── Coordinate helpers ────────────────────────────────────────────────────────
 // SVG viewport: 68 × 105 units (matches real pitch proportions in metres)
@@ -241,15 +240,6 @@ export default function ScenarioView({
   const [result, setResult] = useState<{ level: ScoreLevel; points: number } | null>(null)
   const [showCelebration, setShowCelebration] = useState(false)
 
-  // Intro (ground-level view) state
-  const [showIntro, setShowIntro] = useState(true)   // opacity — fades to 0 first
-  const [hasIntro,  setHasIntro]  = useState(true)   // DOM presence — removed after fade
-
-  const handleIntroDone = useCallback(() => {
-    setShowIntro(false)
-    setTimeout(() => setHasIntro(false), 420)
-  }, [])
-
   // Reset when scenario changes
   useEffect(() => {
     setPlayerPos(scenario.start)
@@ -257,8 +247,6 @@ export default function ScenarioView({
     setResult(null)
     setIsDragging(false)
     setShowCelebration(false)
-    setShowIntro(true)
-    setHasIntro(true)
   }, [scenario])
 
   // Convert screen (clientX/Y) → game coords via SVG CTM
@@ -389,45 +377,16 @@ export default function ScenarioView({
         <p className="text-white text-sm md:text-base font-medium leading-snug">
           {scenario.prompt}
         </p>
-        {showIntro ? (
-          <p className="text-gray-400 text-xs mt-1">
-            <span className="text-red-400 font-bold">■</span> Opponents &nbsp;
-            <span className="text-blue-400 font-bold">■</span> Teammates &nbsp;·&nbsp;
-            <span className="text-yellow-300 font-bold">YOU ▼</span> is the camera
-          </p>
-        ) : phase === 'placing' ? (
+        {phase === 'placing' && (
           <p className="text-gray-400 text-xs mt-1">
             Tap or drag <span className="text-yellow-300 font-semibold">your player</span> to where you think they should go
           </p>
-        ) : null}
+        )}
       </div>
 
-      {/* ── Pitch area (intro + top-down layered) ── */}
-      <div className="flex-1 min-h-0 relative overflow-hidden">
+      {/* ── Pitch area ── */}
+      <div className="flex-1 min-h-0 flex items-center justify-center p-2 overflow-hidden">
 
-        {/* Ground-level intro — fades out */}
-        {hasIntro && (
-          <div
-            className="absolute inset-0 z-10"
-            style={{
-              opacity: showIntro ? 1 : 0,
-              transition: 'opacity 0.42s ease',
-              pointerEvents: showIntro ? 'auto' : 'none',
-            }}
-          >
-            <GroundView scenario={scenario} onDone={handleIntroDone} />
-          </div>
-        )}
-
-        {/* Top-down placement view — fades in */}
-        <div
-          className="absolute inset-0 flex items-center justify-center p-2"
-          style={{
-            opacity: showIntro ? 0 : 1,
-            transition: 'opacity 0.42s ease',
-            pointerEvents: showIntro ? 'none' : 'auto',
-          }}
-        >
         {/* Celebration overlay */}
         {showCelebration && (
           <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
@@ -441,6 +400,7 @@ export default function ScenarioView({
         <svg
           ref={svgRef}
           viewBox={`-1 -3 ${PW + 2} ${PH + 5}`}
+          overflow="visible"
           className="h-full w-auto max-w-full"
           style={{ cursor: phase === 'placing' ? (isDragging ? 'grabbing' : 'crosshair') : 'default', touchAction: 'none' }}
           onMouseDown={onSVGMouseDown}
@@ -456,16 +416,27 @@ export default function ScenarioView({
 
           {/* ── Target zone (revealed after lock) ── */}
           {phase === 'revealed' && (
-            <ellipse
-              cx={svgTarget.x}
-              cy={svgTarget.y}
-              rx={svgTargetRx}
-              ry={svgTargetRy}
-              fill="rgba(34,197,94,0.30)"
-              stroke="rgba(34,197,94,0.85)"
-              strokeWidth={0.6}
-              strokeDasharray="2 1.5"
-            />
+            <>
+              {/* Soft white glow fill */}
+              <ellipse
+                cx={svgTarget.x}
+                cy={svgTarget.y}
+                rx={svgTargetRx}
+                ry={svgTargetRy}
+                fill="rgba(255,255,255,0.18)"
+              />
+              {/* Bright dashed border — white so it stands out on any green */}
+              <ellipse
+                cx={svgTarget.x}
+                cy={svgTarget.y}
+                rx={svgTargetRx}
+                ry={svgTargetRy}
+                fill="none"
+                stroke="rgba(255,255,255,0.92)"
+                strokeWidth={1.0}
+                strokeDasharray="3 2"
+              />
+            </>
           )}
 
           {/* ── Opponents (red) ── */}
@@ -559,19 +530,11 @@ export default function ScenarioView({
             />
           )}
         </svg>
-        </div> {/* end top-down layer */}
-      </div>   {/* end pitch area */}
+      </div>
 
       {/* ── Bottom panel ── */}
       <div className="px-4 pb-4 pt-2 bg-gray-900/80 backdrop-blur-sm">
-        {showIntro ? (
-          <button
-            onClick={handleIntroDone}
-            className="w-full py-3.5 rounded-xl bg-gray-700 hover:bg-gray-600 active:bg-gray-800 text-gray-200 font-bold text-lg shadow-lg transition-colors"
-          >
-            Show the pitch →
-          </button>
-        ) : phase === 'placing' ? (
+        {phase === 'placing' ? (
           <button
             onClick={handleLock}
             className="w-full py-3.5 rounded-xl bg-green-500 hover:bg-green-400 active:bg-green-600 text-white font-bold text-lg shadow-lg transition-colors"
